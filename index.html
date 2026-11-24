@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>una habitación</title>
+<style>
+  :root { --gris:#c0c0c0; --azul:#000080; --azul2:#1084d0; --blanco:#fff; --oscuro:#808080; --negro:#000; }
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; overflow:hidden; overscroll-behavior:none; touch-action:manipulation; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; font-family:Tahoma, "MS Sans Serif", Arial, sans-serif; background:#cfd8f0; }
+
+  /* Fondo: degradado lento que reacciona al mouse (se pinta desde JS) */
+  #fondo { position:fixed; inset:0; }
+  #desk { position:fixed; inset:0 0 40px 0; }
+
+  /* Ventana retro */
+  .win {
+    position:absolute; width:min(320px, 82vw);
+    background:var(--gris);
+    border:2px solid; border-color:var(--blanco) var(--negro) var(--negro) var(--blanco);
+    box-shadow: inset -1px -1px var(--oscuro), inset 1px 1px #dfdfdf, 4px 6px 14px rgba(0,0,40,.25);
+    padding:3px; opacity:0; transform:translateY(6px);
+    animation:entra .9s ease forwards;
+  }
+  .win.sale { animation:sale .3s ease forwards; }
+  @keyframes entra { to { opacity:1; transform:none; } }
+  @keyframes sale  { to { opacity:0; transform:scale(.96); } }
+
+  .bar {
+    display:flex; justify-content:flex-end; align-items:center; min-height:34px;
+    background:linear-gradient(90deg, hsl(var(--h), 50%, 58%), hsl(calc(var(--h) + 55), 55%, 68%));
+    padding:3px;
+    cursor:grab; touch-action:none; user-select:none;
+  }
+  .x {
+    width:30px; height:26px; padding:0; line-height:20px; font:bold 20px Tahoma, sans-serif;
+    background:var(--gris); color:var(--negro); cursor:pointer;
+    border:2px solid; border-color:var(--blanco) var(--negro) var(--negro) var(--blanco);
+  }
+  .cuerpo { padding:26px 20px 28px; display:flex; justify-content:center; }
+  .cuerpo p { margin:0; font-size:15px; line-height:1.45; text-align:center; color:var(--negro); }
+  .ok {
+    min-width:96px; padding:4px 14px; font:13px Tahoma, sans-serif; color:var(--negro);
+    background:var(--gris); cursor:pointer;
+    border:2px solid; border-color:var(--blanco) var(--negro) var(--negro) var(--blanco);
+  }
+  .ok:active, .x:active { border-color:var(--negro) var(--blanco) var(--blanco) var(--negro); }
+  .ok:focus-visible, .x:focus-visible { outline:1px dotted var(--negro); outline-offset:-5px; }
+
+  /* Barra de tareas */
+  #tareas {
+    position:fixed; left:0; right:0; bottom:0; height:calc(40px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:var(--gris); border-top:2px solid var(--blanco);
+    display:flex; align-items:center; justify-content:flex-end; padding-inline:6px; z-index:9999;
+  }
+  #reloj {
+    font-size:13px; padding:4px 12px; color:var(--negro);
+    border:1px solid; border-color:var(--oscuro) var(--blanco) var(--blanco) var(--oscuro);
+  }
+  @media (max-width: 600px) {
+    .win { width:86vw; }
+    .cuerpo p { font-size:17px; }
+    .cuerpo { padding:24px 18px 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .win { animation-duration:.01s; } }
+</style>
+</head>
+<body>
+  <canvas id="fondo"></canvas>
+  <div id="desk"></div>
+  <div id="tareas"><div id="reloj"></div></div>
+
+<script>
+  // ---------- TEXTO ORIGINAL ----------
+  // Cada grupo son frases relacionadas: aparecen juntas, cada una en su ventana.
+  // Al cerrar todas las ventanas del grupo, aparece el siguiente. Al final vuelve al inicio (loop).
+  const ESCENAS = [
+    ["una habitación", "paredes, ventanas, una puerta", "no sé si la recuerdas"],
+    ["la luz entra de alguna parte, el sonido envuelve, lleva, susurra, abraza"],
+    ["hay cosas que parecen estar donde las dejaste", "¿dónde las dejaste? o quizás alguien más las dejó"],
+    ["conoces el lugar sin saber de dónde… qué extraño", "quizás no es un lugar que hayas visitado quizás lo inventaste alguna vez y, de alguna manera, todavía existe"],
+    ["¿y si los lugares también recuerdan?", "guardan algo de las personas que estuvieron ahí"],
+    ["sonidos,", "sensaciones,", "palabras que se dijeron o se pensaron", "esencias flotando por el espacio", "colores, risas, llanto"],
+    ["o quizás no guardan nada quizás eres tú quien deja las cosas incluso después de irte", "quizás también se puede dejar algo en un lugar que nunca existió"],
+    ["hay una puerta, ¿la viste?", "detrás de la puerta hay otra cosa", "¿una habitación?"],
+    ["a veces una puerta es solo una puerta otras veces es el recuerdo de haber esperado a alguien del otro lado a veces eres solo tú"],
+    ["¿cómo se veía la habitación donde creciste? no los muebles, ¿cómo se sentía?", "¿y los lugares que inventabas dentro de ella?", "aquellos que aparecían debajo de las mesas, detrás de las cortinas, entre las cobijas"],
+    ["¿eran escondites? ¿eran casas? ¿eran mundos enteros?", "el techo parece más alto", "las cosas tienen otro tamaño"],
+    ["lugares que pueden convertirse en cualquier cosa", "una casa dentro de otra casa", "un refugio que cabe en un rincón"],
+    ["un espacio que se construye con lo que hay a la mano y que puede convertirse en cualquier cosa", "no hace falta que tenga sentido"],
+    ["¿todavía existen?", "¿seguimos construyendolos en algún otro lugar?"],
+    ["el agua se mueve", "algo flota", "y se hunde", "el sonido cambia", "la luz atraviesa la superficie"],
+    ["calma", "silencio", "¿dónde estabamos?"],
+    ["la música termina", "pero vuelve a empezar", "y otra vez"],
+    ["el suelo se mueve o eres tú quien da vueltas", "como cuando el juego todavía no termina", "como cuando repetir algo lo transforma en otra cosa"],
+    ["¿en qué momento llegaste al piso?", "¿la habías escuchado antes?"],
+    ["caminas lentamente", "lo ves pero no sabes qué es", "métete, ve", "uno, dos, tres…"],
+    ["¿a dónde ibas?", "sal"],
+    ["ya habías estado aquí", "o quizás nunca habías llegado"],
+    ["hay recorridos que no llevan a ninguna parte y, sin embargo, dan ganas de seguirlos", "hay lugares que se inventan mientras se recorren"],
+    ["recuerdos sin imágenes", "una temperatura", "un olor", "una sensación en la punta de los pies"],
+    ["¿qué fue lo que pasó? ¿y si lo inventamos?", "¿eso también es recordar?"],
+    ["quizás no todo tiene que haber sucedido para sentirse familiar", "tal vez, también se puede extrañar algo que solamente existió mientras jugábamos"],
+    ["un lugar que cambia cada vez que lo visitamos", "crece en la impermanencia de la mente"],
+    ["una casa con habitaciones que nunca existieron", "una ventana hacia un sitio que no conocemos", "un refugio que no necesita paredes"],
+    ["y aún así, pertenecer ahí", "poder entrar", "poder quedarse", "poder transformar todo y empezar de nuevo"],
+    ["no tiene sentido", "no sabemos cómo llegamos", "quédate un momento más"],
+    ["no hay que terminar de construirlo", "todavía puede permanecer"],
+    ["hay algo familiar en este lugar", "la luz", "el sonido"],
+    ["¿será que olvidaste algo antes de irte?", "¿o llegaste demasiado pronto?", "¿cuánto tiempo ha pasado?"],
+    ["no sé si hemos avanzado", "quizás todo sigue exactamente igual", "quizás algo ha cambiado"],
+    ["quizás el lugar sigue ahí, pero ya no tiene el mismo tamaño", "o quizás somos"]
+  ];
+
+
+  // ---------- VENTANAS ----------
+  const desk = document.getElementById("desk");
+  let escena = 0, abiertas = 0, contador = 0, zTop = 10;
+
+  function lanzarEscena() {
+    const frases = ESCENAS[escena];
+    abiertas = frases.length;
+    frases.forEach((texto, i) => setTimeout(() => crearVentana(texto, i, frases.length), i * 900));
+  }
+
+  function crearVentana(texto, i, n) {
+    const w = document.createElement("div");
+    w.className = "win";
+    w.innerHTML = `<div class="bar"><button class="x" aria-label="Cerrar">×</button></div>
+      <div class="cuerpo"><p></p></div>`;
+    w.querySelector("p").textContent = texto;
+    contador++;
+    w.style.zIndex = ++zTop;
+    desk.appendChild(w);
+
+    // Posición: repartidas en franjas verticales, con algo de azar
+    const r = w.getBoundingClientRect();
+    const x = 8 + Math.random() * Math.max(0, desk.clientWidth - r.width - 16);
+    const centro = ((i + 0.5) / n) * desk.clientHeight;
+    const y = Math.min(Math.max(8, centro - r.height / 2 + (Math.random() - 0.5) * 40), desk.clientHeight - r.height - 8);
+    w.style.left = x + "px";
+    w.style.top = Math.max(8, y) + "px";
+
+    w.querySelector(".x").onclick = () => cerrar(w);
+    arrastrar(w);
+  }
+
+  function cerrar(w) {
+    if (w.classList.contains("sale")) return;
+    w.classList.add("sale");
+    setTimeout(() => w.remove(), 300);
+    if (--abiertas === 0) {
+      setTimeout(() => { escena = (escena + 1) % ESCENAS.length; lanzarEscena(); }, 1400);
+    }
+  }
+
+  function arrastrar(w) {
+    const barra = w.querySelector(".bar");
+    barra.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".x")) return;
+      w.style.zIndex = ++zTop;
+      const dx = e.clientX - w.offsetLeft, dy = e.clientY - w.offsetTop;
+      const mover = (m) => { w.style.left = m.clientX - dx + "px"; w.style.top = m.clientY - dy + "px"; };
+      const soltar = () => { document.removeEventListener("pointermove", mover); document.removeEventListener("pointerup", soltar); };
+      document.addEventListener("pointermove", mover);
+      document.addEventListener("pointerup", soltar);
+    });
+    w.addEventListener("pointerdown", () => (w.style.zIndex = ++zTop));
+  }
+
+  // ---------- FONDO: degradado lento + luz que sigue al mouse ----------
+  const lienzo = document.getElementById("fondo");
+  const ctx = lienzo.getContext("2d");
+  let mx = 0.5, my = 0.4, lx = 0.5, ly = 0.4;
+
+  function ajustar() { lienzo.width = innerWidth; lienzo.height = innerHeight; }
+  addEventListener("resize", ajustar); ajustar();
+  const luz = (e) => { mx = e.clientX / innerWidth; my = e.clientY / innerHeight; };
+  addEventListener("pointermove", luz);
+  addEventListener("pointerdown", luz); // en celular, la luz sigue tu dedo al tocar
+
+  function pintar(t) {
+    lx += (mx - lx) * 0.04; ly += (my - ly) * 0.04;           // suavizado
+    const h = (t / 1000 * 3 + lx * 60) % 360;                   // matiz lento (+ mouse)
+    document.documentElement.style.setProperty("--h", h);      // las barras de ventana siguen el mismo color
+    const W = lienzo.width, H = lienzo.height;
+    const g = ctx.createLinearGradient(0, 0, W * (0.4 + ly * 0.6), H);
+    g.addColorStop(0, `hsl(${h}, 65%, 80%)`);
+    g.addColorStop(0.5, `hsl(${h + 55}, 60%, 78%)`);
+    g.addColorStop(1, `hsl(${h + 120}, 65%, 82%)`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    const r = ctx.createRadialGradient(lx * W, ly * H, 0, lx * W, ly * H, Math.max(W, H) * 0.45);
+    r.addColorStop(0, `hsla(${h + 180}, 90%, 92%, 0.75)`);
+    r.addColorStop(1, `hsla(${h + 180}, 90%, 92%, 0)`);
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    requestAnimationFrame(pintar);
+  }
+  requestAnimationFrame(pintar);
+
+  // ---------- RELOJ ----------
+  const reloj = document.getElementById("reloj");
+  const hora = () => (reloj.textContent = new Date().toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" }));
+  hora(); setInterval(hora, 20000);
+
+  lanzarEscena();
+</script>
+</body>
+</html>
